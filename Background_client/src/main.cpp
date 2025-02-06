@@ -1,25 +1,7 @@
-#define SECURITY_WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-#include <iostream>
-#include <vector>
-#include <commctrl.h>
+#include "include.h"
+#include <sstream>
 
-#include <sddl.h>
-#include <Sspi.h>
-#include <iphlpapi.h>
-#include <comdef.h>
-#include <wincodec.h>
-#include <shlwapi.h>
-
-#pragma comment(lib, "Iphlpapi.lib")
-#pragma comment(lib, "Secur32.lib") 
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "iphlpapi.lib")
-#pragma comment(lib, "windowscodecs.lib")
-#pragma comment(lib, "shlwapi.lib")
-#pragma comment(lib, "gdi32.lib")
+#include <fstream>
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
@@ -28,105 +10,6 @@
 SOCKET g_socket = INVALID_SOCKET;
 NOTIFYICONDATA nid = {};
 HMENU g_trayMenu = NULL;
-
-std::string GetDomainName() {
-    DWORD bufferSize = 0;
-    if (!GetComputerNameEx(ComputerNameDnsDomain, nullptr, &bufferSize)) {
-        if (GetLastError() != ERROR_MORE_DATA) {
-            return "";
-        }
-    }
-
-    std::vector<wchar_t> buffer(bufferSize);
-    if (!GetComputerNameEx(ComputerNameDnsDomain, buffer.data(), &bufferSize)) {
-        return "";
-    }
-
-    return std::wstring(buffer.data()).begin() != std::wstring(buffer.data()).end()
-        ? std::string(buffer.data(), buffer.data() + wcslen(buffer.data()))
-        : "";
-}
-
-// Функция для получения имени машины
-std::string GetMachineName() {
-    DWORD bufferSize = MAX_COMPUTERNAME_LENGTH + 1;
-    std::vector<wchar_t> buffer(bufferSize);
-    if (!GetComputerNameEx(ComputerNamePhysicalNetBIOS, buffer.data(), &bufferSize)) {
-        return "";
-    }
-
-    std::wstring wideStr(buffer.data());
-    if (!wideStr.empty()) {
-        return std::string(wideStr.begin(), wideStr.end());
-    }
-    else {
-        return "";
-    }
-}
-
-// Функция для получения IP-адреса
-std::string GetIPAddress() {
-    PIP_ADAPTER_ADDRESSES pAddr = nullptr;
-    ULONG outBufLen = 15000;
-
-    pAddr = (IP_ADAPTER_ADDRESSES*)malloc(outBufLen);
-    if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, pAddr, &outBufLen) == NO_ERROR) {
-        for (PIP_ADAPTER_ADDRESSES adapter = pAddr; adapter != nullptr; adapter = adapter->Next) {
-            for (PIP_ADAPTER_UNICAST_ADDRESS addr = adapter->FirstUnicastAddress; addr != nullptr; addr = addr->Next) {
-                sockaddr_in* sa = (sockaddr_in*)addr->Address.lpSockaddr;
-                if (sa != nullptr && sa->sin_family == AF_INET) {
-                    char ip[INET_ADDRSTRLEN];
-                    inet_ntop(AF_INET, &(sa->sin_addr), ip, INET_ADDRSTRLEN);
-                    free(pAddr);
-                    return std::string(ip);
-                }
-            }
-        }
-    }
-    free(pAddr);
-    return "";
-}
-
-// Функция для получения имени пользователя
-std::string GetUserName() {
-    DWORD bufferSize = 0;
-    EXTENDED_NAME_FORMAT nameFormat = NameSamCompatible;
-
-    if (!GetUserNameEx(nameFormat, nullptr, &bufferSize)) {
-        return "";
-    }
-
-    std::vector<wchar_t> buffer(bufferSize);
-    if (!GetUserNameEx(nameFormat, buffer.data(), &bufferSize)) {
-        return "";
-    }
-
-    std::wstring wideStr(buffer.data());
-    if (!wideStr.empty()) {
-        return std::string(wideStr.begin(), wideStr.end());
-    }
-    else {
-        return "";
-    }
-}
-
-struct ClientInfo {
-    std::string domain;
-    std::string machine;
-    std::string ip;
-    std::string user;
-};
-
-ClientInfo CollectClientInfo() {
-    ClientInfo info;
-    info.domain = GetDomainName();
-    info.machine_name = GetMachineName();
-    info.ip = GetIPAddress();
-    info.user_name = GetUserName();
-    return info;
-}
-
-
 
 void UpdateTrayMenuStatus() {
     if (g_trayMenu) {
@@ -265,7 +148,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    const wchar_t* className = L"BackgroundClient";
+
+
+    const wchar_t* className = TEXT("BackgroundClient");
 
     WNDCLASS wc = {};
     wc.lpfnWndProc = WndProc;
@@ -283,6 +168,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
 
+
+    std::ofstream ofs("example.txt");
+    ClientInfo clientInfo = CollectClientInfo();
+
+    ofs << "Domain: " << (clientInfo.domain.empty() ? "N/A" : clientInfo.domain) << std::endl;
+    ofs << "Machine Name: " << (clientInfo.machine.empty() ? "N/A" : clientInfo.machine) << std::endl;
+    ofs << "IP Address: " << (clientInfo.ip.empty() ? "N/A" : clientInfo.ip) << std::endl;
+    ofs << "User Name: " << (clientInfo.user.empty() ? "N/A" : clientInfo.user) << std::endl;
+
+    ofs.close();
+    return 0;
+
+    return 0;
     ShowWindow(hwnd, SW_HIDE);
     UpdateWindow(hwnd);
 
